@@ -21,7 +21,7 @@ from cds_quizzes.exports import (
     round0_monitor_dataframe,
     sessions_dataframe,
 )
-from cds_quizzes.importers import import_roster, import_workbook
+from cds_quizzes.importers import import_form_questions, import_roster, import_workbook
 from cds_quizzes.models import Answer, Assignment, DraftAnswer, FormQuestion, QuizSession, Student
 from cds_quizzes.services import WorkflowError, reset_student_state
 from cds_quizzes.streamlit_runtime import initialize_streamlit_app_data
@@ -88,6 +88,12 @@ try:
         uploaded_workbook = st.file_uploader("Upload replacement workbook", type=["xlsx"])
         if uploaded_workbook and st.button("Import uploaded workbook"):
             run_import(db, import_workbook, uploaded_workbook, "Workbook imported.")
+
+        st.subheader("Generated team forms")
+        st.write("Import the generated form-question CSV before importing its matching roster CSV.")
+        uploaded_form_questions = st.file_uploader("Upload generated form-question CSV", type=["csv"])
+        if uploaded_form_questions and st.button("Import generated form-question CSV"):
+            run_import(db, import_form_questions, uploaded_form_questions, "Generated form questions imported.")
 
         st.subheader("Roster")
         if DEFAULT_SAMPLE_ROSTER_PATH.exists():

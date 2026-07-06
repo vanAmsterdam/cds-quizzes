@@ -8,6 +8,7 @@ venv/
 .streamlit/secrets.toml
 data/dev.sqlite
 data/*.sqlite
+data/private*
 data/private*.csv
 data/roster*.csv
 !data/sample_roster.csv

@@ -53,8 +53,9 @@ After first deploy:
 1. Open the app.
 2. Go to the `Admin` page.
 3. Import the bundled workbook if it is not already loaded.
-4. Upload the private roster CSV.
-5. Open `Live Monitor` while students complete Round 0.
+4. Upload the private generated form-question CSV.
+5. Upload the private roster CSV.
+6. Open `Live Monitor` while students complete Round 0.
 
 Do not commit `.streamlit/secrets.toml`, `data/dev.sqlite`, or private roster CSVs.
 
@@ -78,6 +79,27 @@ demo_a,demo-a,team_1,Round 2,Student A
 ```
 
 Each `sign_in_key` belongs to exactly one student. Add one row per student and quiz round. `Round 0` is built into the app and should not be included in the roster.
+
+## Private Classroom Roster And Slips
+
+Generate a 28-student classroom roster, four predictable test groups, and printable grouped login slips with:
+
+```bash
+python tools/generate_roster_materials.py
+```
+
+This writes:
+
+- `data/private_class_roster.csv`: upload this in the Admin page as the production roster.
+- `data/private_class_form_questions.csv`: upload this in the Admin page after the workbook and before the roster.
+- `data/private_class_slips.html`: open in a browser and print/cut the grouped login slips.
+- `data/private_class_slips_index.csv`: instructor-only index of groups, roles, login IDs, and assigned question forms.
+
+The generated form-question CSV gives every team the same 36-question pool. Within each team, the questions are randomly reassigned into participant-round batches. Each 6-question batch has two easier questions, two harder questions, and two hardest questions. In a 4-person team, the fourth role receives a stratified duplicate subset from that team's 36-question pool, so no extra questions are introduced into that team.
+
+The real student IDs are random lowercase letters only. The default layout is eight 3-person teams plus one flexible final team: use all four `teami` slips for 28 students, leave the final `teami` role `d` slip unused for 27 students, and leave roles `c` and `d` unused for 26 students. Test IDs are predictable and separated into `testa` through `testd` groups, with IDs like `testaa`, `testab`, and `testac`.
+
+These `data/private...` files are ignored by git. Do not commit them to a public repository; upload the roster CSV through the Admin page instead.
 
 ## Workflow
 

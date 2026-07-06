@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import BinaryIO
 
 import pandas as pd
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from .models import Assignment, FormQuestion, Question, Student
@@ -48,6 +48,7 @@ KEY_COLUMNS = {
 }
 
 ROSTER_COLUMNS = {"student_id", "sign_in_key", "group_id", "round_id", "question_set_id"}
+FORM_QUESTION_COLUMNS = {"round_id", "question_set_id", "question_order", "question_id"}
 
 
 @dataclass(frozen=True)
@@ -183,6 +184,72 @@ def import_roster(db: Session, source: str | Path | BinaryIO) -> ImportSummary:
         assignment_count += 1
 
     return ImportSummary(students=len(students_by_key), assignments=assignment_count)
+
+
+def import_form_questions(db: Session, source: str | Path | BinaryIO) -> ImportSummary:
+    form_questions = pd.read_csv(source, dtype=str).fillna("")
+    require_columns(form_questions, FORM_QUESTION_COLUMNS, "Form-question CSV")
+    form_questions = form_questions.dropna(how="all")
+
+    known_question_ids = set(db.execute(select(Question.question_id)).scalars())
+    parsed_rows: list[tuple[str, str, int, str]] = []
+    seen_slots: set[tuple[str, str, int]] = set()
+    seen_questions: set[tuple[str, str, str]] = set()
+    uploaded_forms: set[tuple[str, str]] = set()
+
+    for _, row in form_questions.iterrows():
+        round_id = str(row["round_id"]).strip()
+        question_set_id = str(row["question_set_id"]).strip()
+        question_order = _as_int(clean_cell(row["question_order"]))
+        question_id = str(row["question_id"]).strip()
+        if not (round_id and question_set_id and question_order and question_id):
+            raise ValueError("Every form-question row must include round_id, question_set_id, question_order, and question_id.")
+        if question_id not in known_question_ids:
+            raise ValueError(f"Unknown question_id in form-question CSV: {question_id}")
+
+        slot_key = (round_id, question_set_id, question_order)
+        if slot_key in seen_slots:
+            raise ValueError(f"Duplicate form slot: {round_id} / {question_set_id} / {question_order}")
+        seen_slots.add(slot_key)
+
+        question_key = (round_id, question_set_id, question_id)
+        if question_key in seen_questions:
+            raise ValueError(f"Duplicate question in form: {round_id} / {question_set_id} / {question_id}")
+        seen_questions.add(question_key)
+
+        uploaded_forms.add((round_id, question_set_id))
+        parsed_rows.append((round_id, question_set_id, question_order, question_id))
+
+    form_sizes: dict[tuple[str, str], int] = {}
+    for round_id, question_set_id, _, _ in parsed_rows:
+        form_sizes[(round_id, question_set_id)] = form_sizes.get((round_id, question_set_id), 0) + 1
+    bad_sizes = {form: size for form, size in form_sizes.items() if size != 6}
+    if bad_sizes:
+        details = ", ".join(f"{round_id}/{question_set_id} has {size}" for (round_id, question_set_id), size in bad_sizes.items())
+        raise ValueError(f"Every uploaded round/form must contain exactly 6 questions; {details}.")
+
+    for round_id, question_set_id in uploaded_forms:
+        db.execute(
+            delete(FormQuestion).where(
+                FormQuestion.round_id == round_id,
+                FormQuestion.question_set_id == question_set_id,
+            )
+        )
+    db.flush()
+
+    for round_id, question_set_id, question_order, question_id in parsed_rows:
+        db.add(
+            FormQuestion(
+                round_id=round_id,
+                question_set_id=question_set_id,
+                question_order=question_order,
+                question_id=question_id,
+            )
+        )
+
+    db.flush()
+    _validate_form_sizes(db)
+    return ImportSummary(form_questions=len(parsed_rows))
 
 
 def _validate_form_sizes(db: Session) -> None:
