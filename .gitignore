@@ -13,3 +13,4 @@ data/roster*.csv
 !data/sample_roster.csv
 
 .DS_Store
+~$*.xlsx
