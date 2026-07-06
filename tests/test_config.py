@@ -1,4 +1,4 @@
-from cds_quizzes.config import _normalize_database_url
+from cds_quizzes.config import get_settings, _normalize_database_url
 from cds_quizzes.database import _postgres_connect_args
 
 
@@ -30,3 +30,17 @@ def test_explicit_postgres_connect_args_are_respected():
 
     assert "gssencmode" not in connect_args
     assert "sslmode" not in connect_args
+
+
+def test_postgres_pool_defaults_are_classroom_sized(monkeypatch):
+    monkeypatch.setenv("CDS_DATABASE_URL", "postgresql+psycopg2://user:pass@example.com:5432/postgres")
+    monkeypatch.delenv("CDS_DATABASE_POOL_SIZE", raising=False)
+    monkeypatch.delenv("CDS_DATABASE_MAX_OVERFLOW", raising=False)
+    get_settings.cache_clear()
+    try:
+        settings = get_settings()
+    finally:
+        get_settings.cache_clear()
+
+    assert settings.database_pool_size == 5
+    assert settings.database_max_overflow == 0

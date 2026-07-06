@@ -18,7 +18,7 @@ DEFAULT_SQLITE_PATH = DATA_DIR / "dev.sqlite"
 class Settings:
     database_url: str
     admin_password: str | None
-    database_pool_size: int = 2
+    database_pool_size: int = 5
     database_max_overflow: int = 0
     database_pool_timeout: int = 10
     database_pool_recycle: int = 300
@@ -54,7 +54,7 @@ def get_settings() -> Settings:
     return Settings(
         database_url=database_url,
         admin_password=admin_password,
-        database_pool_size=_int_setting("CDS_DATABASE_POOL_SIZE", ("database", "pool_size"), 2),
+        database_pool_size=_int_setting("CDS_DATABASE_POOL_SIZE", ("database", "pool_size"), 5),
         database_max_overflow=_int_setting("CDS_DATABASE_MAX_OVERFLOW", ("database", "max_overflow"), 0),
         database_pool_timeout=_int_setting("CDS_DATABASE_POOL_TIMEOUT", ("database", "pool_timeout"), 10),
         database_pool_recycle=_int_setting("CDS_DATABASE_POOL_RECYCLE", ("database", "pool_recycle"), 300),
