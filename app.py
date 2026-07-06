@@ -223,7 +223,7 @@ def render_individual_phase(db, student_id: str, round_id: str, session) -> None
     if not persist_individual_drafts_if_changed(db, student_id, round_id, current_answers):
         return
 
-    if st.button("Submit original answers", type="primary"):
+    if st.button("Submit answers", type="primary"):
         submit_individual_from_widgets(db, student_id, round_id, questions)
 
 
