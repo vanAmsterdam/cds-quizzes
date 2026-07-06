@@ -305,24 +305,12 @@ def render_selection_phase(db, student_id: str, round_id: str) -> None:
 
 
 def render_discussion_phase(db, student_id: str, round_id: str, session) -> None:
-    questions = get_assigned_questions(db, student_id, round_id)
-    answers = get_answers(db, student_id, round_id)
     selected_id = session.selected_question_id
     if not selected_id:
         st.error("No discussion question is selected.")
         return
 
-    selected_item = next((item for item in questions if item.question.question_id == selected_id), None)
-    if selected_item is None:
-        st.error("Selected discussion question is not assigned to this student.")
-        return
-
     st.subheader(f"{round_id}: discussion phase")
-    with st.container(border=True):
-        render_question_block(selected_item.order, selected_item.question)
-        answer = answers.get(selected_id)
-        st.caption(f"Original answer: {answer_label(selected_item.question, answer.original_answer if answer else '')}")
-
     if session.discussion_started_at is None:
         st.write("The 2 minute discussion timer starts only after you press the button below.")
         st.warning("Do not press start until the instructor tells you to begin the discussion phase.")
@@ -341,27 +329,35 @@ def render_discussion_phase(db, student_id: str, round_id: str, session) -> None
         mins, secs = divmod(remaining, 60)
         st.metric("Discussion time remaining", f"{mins}:{secs:02d}")
         st.progress(remaining / DISCUSSION_DURATION_SECONDS)
-        st.write("Discuss this question with your peers. Revision opens when the timer ends.")
         if st_autorefresh is not None:
             st_autorefresh(interval=DISCUSSION_REFRESH_INTERVAL_MS, key=f"discussion-timer:{student_id}:{round_id}")
-        return
+    else:
+        try:
+            finish_discussion_phase(db, student_id, round_id)
+            db.commit()
+            st.rerun()
+        except WorkflowError as exc:
+            db.rollback()
+            st.error(str(exc))
+            return
 
-    try:
-        finish_discussion_phase(db, student_id, round_id)
-        db.commit()
-        st.rerun()
-    except WorkflowError as exc:
-        db.rollback()
-        st.error(str(exc))
+    render_revision_form(db, student_id, round_id, session)
 
 
 def render_revision_phase(db, student_id: str, round_id: str, session) -> None:
     st.subheader(f"{round_id}: revision phase")
+    render_revision_form(db, student_id, round_id, session)
+
+
+def render_revision_form(db, student_id: str, round_id: str, session) -> None:
     questions = get_assigned_questions(db, student_id, round_id)
     answers = get_answers(db, student_id, round_id)
     selected_id = session.selected_question_id
     if not selected_id:
         st.error("No discussion question is selected.")
+        return
+    if selected_id not in {item.question.question_id for item in questions}:
+        st.error("Selected discussion question is not assigned to this student.")
         return
 
     st.write("Only the selected discussion question can be revised.")

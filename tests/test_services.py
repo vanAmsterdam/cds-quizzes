@@ -180,19 +180,30 @@ def test_round2_skips_selection_and_randomly_assigns_one_question(db):
     assert session.discussion_started_at is None
 
 
-def test_discussion_phase_must_run_before_revision_opens(db):
+def test_revision_opens_after_discussion_phase_starts(db):
     question_ids = answer_all(db, "demo_a", "Round 1")
     select_discussion_question(db, "demo_a", "Round 1", question_ids[0])
     session = db.get(QuizSession, {"student_id": "demo_a", "round_id": "Round 1"})
     assert session.phase == PHASE_DISCUSSION
 
-    with pytest.raises(WorkflowError, match="Revision is not available"):
+    with pytest.raises(WorkflowError, match="Discussion phase has not started"):
         submit_revision(db, "demo_a", "Round 1", question_ids[0], "B")
 
     start_discussion_phase(db, "demo_a", "Round 1")
     assert 0 <= remaining_discussion_seconds(session) <= DISCUSSION_DURATION_SECONDS
     with pytest.raises(WorkflowError, match="still in progress"):
         finish_discussion_phase(db, "demo_a", "Round 1")
+
+    submit_revision(db, "demo_a", "Round 1", question_ids[0], "B")
+    assert session.phase == PHASE_DONE
+    assert session.discussion_ended_at is not None
+
+
+def test_discussion_timer_can_finish_before_revision_submission(db):
+    question_ids = answer_all(db, "demo_a", "Round 1")
+    select_discussion_question(db, "demo_a", "Round 1", question_ids[0])
+    session = db.get(QuizSession, {"student_id": "demo_a", "round_id": "Round 1"})
+    start_discussion_phase(db, "demo_a", "Round 1")
 
     session.discussion_started_at = amsterdam_now() - timedelta(seconds=DISCUSSION_DURATION_SECONDS + 1)
     finish_discussion_phase(db, "demo_a", "Round 1")

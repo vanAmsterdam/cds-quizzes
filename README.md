@@ -88,7 +88,7 @@ Each `sign_in_key` belongs to exactly one student. Add one row per student and q
 5. Individual phase: six questions, six-minute timer based on database start time.
 6. Round 1: student permanently selects one question for discussion.
 7. Discussion phase: student clicks `Start discussion phase now`; this starts the 2-minute discussion timer.
-8. Revision phase: only the selected question is editable after the discussion timer ends.
+8. Revision phase: only the selected question is editable after the discussion timer starts.
 9. Round 2 remains locked until Round 1 revision is submitted; then the app randomly selects one assigned question for discussion and uses the same discussion/revision flow.
 10. Done phase: all answers are locked.
 

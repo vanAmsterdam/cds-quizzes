@@ -256,7 +256,12 @@ def finish_discussion_phase(db: Session, student_id: str, round_id: str) -> None
 
 def submit_revision(db: Session, student_id: str, round_id: str, question_id: str, revised_answer: str) -> None:
     session = db.get(QuizSession, {"student_id": student_id, "round_id": round_id})
-    if session is None or session.phase != PHASE_REVISION:
+    if session is None:
+        raise WorkflowError("Revision is not available for this session.")
+    if session.phase == PHASE_DISCUSSION:
+        if session.discussion_started_at is None:
+            raise WorkflowError("Discussion phase has not started.")
+    elif session.phase != PHASE_REVISION:
         raise WorkflowError("Revision is not available for this session.")
     if session.selected_question_id != question_id:
         raise WorkflowError("Only the selected discussion question can be revised.")
@@ -269,6 +274,8 @@ def submit_revision(db: Session, student_id: str, round_id: str, question_id: st
     now = database_now(db)
     answer.revised_answer = normalize_answer_value(revised_answer)
     answer.revised_saved_at = now
+    if session.discussion_ended_at is None:
+        session.discussion_ended_at = now
     session.revision_submitted_at = now
     session.done_at = now
     session.phase = PHASE_DONE
