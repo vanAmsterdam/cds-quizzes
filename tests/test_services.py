@@ -11,6 +11,7 @@ from cds_quizzes.services import (
     get_or_create_real_session,
     monitor_rows,
     remaining_seconds,
+    reset_student_state,
     select_discussion_question,
     submit_revision,
     submit_round0,
@@ -89,7 +90,7 @@ def test_done_phase_rejects_answer_edits(db):
 def test_joined_export_has_one_row_per_student_round_question(db):
     df = joined_long_dataframe(db)
 
-    assert len(df) == 36
+    assert len(df) == 108
     assert {
         "student_id",
         "round_id",
@@ -98,3 +99,25 @@ def test_joined_export_has_one_row_per_student_round_question(db):
         "selected_for_discussion",
         "revised_answer",
     }.issubset(df.columns)
+
+
+def test_reset_student_state_removes_sessions_and_answers_only_for_that_student(db):
+    submit_round0(db, "demo_a", "A")
+    question_ids = answer_all(db, "demo_a", "Round 1")
+    select_discussion_question(db, "demo_a", "Round 1", question_ids[0])
+    submit_revision(db, "demo_a", "Round 1", question_ids[0], "B")
+
+    submit_round0(db, "demo_b", "A")
+    db.flush()
+
+    reset_student_state(db, "demo_a")
+    db.flush()
+
+    demo_a = next(row for row in monitor_rows(db) if row["student_id"] == "demo_a")
+    demo_b = next(row for row in monitor_rows(db) if row["student_id"] == "demo_b")
+    assert demo_a["signed_in"] is False
+    assert demo_a["round0_done"] is False
+    assert demo_a["original_answers"] == 0
+    assert demo_a["revised_answers"] == 0
+    assert len(get_assigned_questions(db, "demo_a", "Round 1")) == 6
+    assert demo_b["round0_done"] is True

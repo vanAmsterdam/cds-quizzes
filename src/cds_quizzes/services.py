@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Iterable
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from .database import database_now
@@ -256,6 +256,15 @@ def normalize_answer_value(value: object | None) -> str:
     if value is None:
         return ""
     return str(value).strip()
+
+
+def reset_student_state(db: Session, student_id: str) -> None:
+    student = db.get(Student, student_id)
+    if student is None:
+        raise WorkflowError("Unknown student.")
+    db.execute(delete(Answer).where(Answer.student_id == student_id))
+    db.execute(delete(QuizSession).where(QuizSession.student_id == student_id))
+    student.last_seen_at = None
 
 
 def monitor_rows(db: Session) -> list[dict[str, object]]:

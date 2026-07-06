@@ -18,6 +18,7 @@ Sample sign-in keys:
 - `demo-a`
 - `demo-b`
 - `demo-c`
+- `demo-d` through `demo-i`
 
 Admin pages use the password from `.streamlit/secrets.toml`. If no secrets file is present and SQLite is used, the development password is `admin`.
 
@@ -89,6 +90,7 @@ Timestamps recorded by the app use Europe/Amsterdam local time by default.
 ## Admin And Monitoring
 
 - `Admin` page: import workbook, import roster, export sessions/answers/joined CSVs.
+- `Admin` page reset tab: reset one student's sessions and answers while keeping roster assignments.
 - `Live Monitor` page: auto-refreshing roster view with sign-in status, Round 0 completion, current phase, answer counts, and last saved time.
 
 ## Tests

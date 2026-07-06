@@ -24,6 +24,7 @@ from cds_quizzes.exports import (
 )
 from cds_quizzes.importers import import_roster, import_workbook
 from cds_quizzes.models import Answer, Assignment, FormQuestion, QuizSession, Student
+from cds_quizzes.services import WorkflowError, reset_student_state
 
 
 def run_import(db, importer, source, message: str) -> None:
@@ -50,6 +51,26 @@ def count_rows(db, model) -> int:
     return db.execute(select(func.count()).select_from(model)).scalar_one()
 
 
+def student_ids(db) -> list[str]:
+    return list(db.execute(select(Student.student_id).order_by(Student.student_id)).scalars())
+
+
+def run_student_reset(db, student_id: str, confirmation: str) -> None:
+    if confirmation != student_id:
+        st.error("Type the exact student_id to confirm the reset.")
+        return
+    try:
+        reset_student_state(db, student_id)
+        db.commit()
+        st.success(f"Reset session and answer state for {student_id}.")
+    except WorkflowError as exc:
+        db.rollback()
+        st.error(str(exc))
+    except Exception as exc:
+        db.rollback()
+        st.error(f"Reset failed: {exc}")
+
+
 st.set_page_config(page_title="Admin", page_icon=":material/admin_panel_settings:", layout="wide")
 initialize_app_data()
 require_admin()
@@ -57,7 +78,7 @@ require_admin()
 st.title("Admin")
 db = get_session_factory()()
 try:
-    tabs = st.tabs(["Setup", "Exports", "Status"])
+    tabs = st.tabs(["Setup", "Resets", "Exports", "Status"])
     with tabs[0]:
         st.subheader("Question bank")
         if DEFAULT_WORKBOOK_PATH.exists():
@@ -78,13 +99,25 @@ try:
             run_import(db, import_roster, uploaded_roster, "Roster imported.")
 
     with tabs[1]:
+        st.subheader("Reset one student")
+        st.write("This deletes that student's sessions and answers, including Round 0, but keeps the roster and assignments.")
+        students = student_ids(db)
+        if not students:
+            st.info("No students are loaded.")
+        else:
+            selected_student = st.selectbox("Student", students)
+            confirmation = st.text_input("Type the student_id to confirm", key="reset_student_confirmation")
+            if st.button("Reset selected student", type="primary"):
+                run_student_reset(db, selected_student, confirmation)
+
+    with tabs[2]:
         st.subheader("CSV exports")
         export_download("sessions.csv", sessions_dataframe(db))
         export_download("answers.csv", answers_dataframe(db))
         export_download("joined_long.csv", joined_long_dataframe(db))
         export_download("round0_monitor.csv", round0_monitor_dataframe(db))
 
-    with tabs[2]:
+    with tabs[3]:
         st.subheader("Database status")
         counts = {
             "students": count_rows(db, Student),

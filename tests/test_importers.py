@@ -23,3 +23,8 @@ def test_sample_roster_assignments_load_expected_questions(db):
 
     assert len(questions) == 6
     assert [item.order for item in questions] == [1, 2, 3, 4, 5, 6]
+
+
+def test_sample_roster_includes_three_demo_groups(db):
+    for student_id in ("demo_a", "demo_d", "demo_g"):
+        assert len(get_assigned_questions(db, student_id, "Round 1")) == 6
