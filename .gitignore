@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+
+.streamlit/secrets.toml
+data/dev.sqlite
+data/*.sqlite
+data/private*.csv
+data/roster*.csv
+!data/sample_roster.csv
+
+.DS_Store
