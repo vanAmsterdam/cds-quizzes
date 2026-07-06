@@ -84,11 +84,12 @@ Each `sign_in_key` belongs to exactly one student. Add one row per student and q
 1. Student signs in with a key.
 2. Student completes Round 0 answer check.
 3. Student chooses an assigned round.
-4. Individual phase: six questions, six-minute timer based on database start time.
-5. Round 1: student permanently selects one question for discussion.
-6. Round 2: app randomly selects one assigned question for discussion.
-7. Revision phase: only the selected question is editable.
-8. Done phase: all answers are locked.
+4. Student clicks `Start quizz now`; this starts the 6-minute timer.
+5. Individual phase: six questions, six-minute timer based on database start time.
+6. Round 1: student permanently selects one question for discussion.
+7. Round 2: app randomly selects one assigned question for discussion.
+8. Revision phase: only the selected question is editable.
+9. Done phase: all answers are locked.
 
 The backend service layer enforces phase locks; disabled or hidden widgets are not trusted for correctness.
 During the individual phase, answer changes are saved as drafts and finalized automatically when the timer expires.

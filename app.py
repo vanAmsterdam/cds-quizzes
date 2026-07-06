@@ -21,6 +21,7 @@ from cds_quizzes.models import (
     PHASE_INDIVIDUAL,
     PHASE_REVISION,
     PHASE_SELECT_DISCUSSION,
+    QuizSession,
     ROUND0_QUESTION_ID,
 )
 from cds_quizzes.services import (
@@ -153,12 +154,9 @@ def render_round_selector(db, student_id: str) -> None:
 
 
 def render_real_round(db, student_id: str, round_id: str) -> None:
-    try:
-        session = get_or_create_real_session(db, student_id, round_id)
-        db.commit()
-    except WorkflowError as exc:
-        db.rollback()
-        st.error(str(exc))
+    session = db.get(QuizSession, {"student_id": student_id, "round_id": round_id})
+    if session is None:
+        render_round_start(db, student_id, round_id)
         return
 
     if session.phase == PHASE_INDIVIDUAL:
@@ -171,6 +169,20 @@ def render_real_round(db, student_id: str, round_id: str) -> None:
         render_done_phase(db, student_id, round_id)
     else:
         st.error(f"Unknown session phase: {session.phase}")
+
+
+def render_round_start(db, student_id: str, round_id: str) -> None:
+    st.subheader(f"{round_id}: ready")
+    st.write("The 6 minute timer starts only after you press the button below.")
+    st.warning("Do not press start until the instructor tells you to begin.")
+    if st.button("Start quizz now", type="primary"):
+        try:
+            get_or_create_real_session(db, student_id, round_id)
+            db.commit()
+            st.rerun()
+        except WorkflowError as exc:
+            db.rollback()
+            st.error(str(exc))
 
 
 def render_individual_phase(db, student_id: str, round_id: str, session) -> None:

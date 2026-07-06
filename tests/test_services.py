@@ -67,6 +67,14 @@ def test_refresh_does_not_reset_individual_timer(db):
     assert 0 <= remaining_seconds(second) <= 360
 
 
+def test_real_round_session_is_created_only_when_explicitly_started(db):
+    assert db.get(QuizSession, {"student_id": "demo_a", "round_id": "Round 1"}) is None
+
+    session = get_or_create_real_session(db, "demo_a", "Round 1")
+
+    assert session.individual_started_at is not None
+
+
 def test_saved_drafts_are_finalized_when_individual_phase_completes(db):
     questions = get_assigned_questions(db, "demo_a", "Round 1")
     first_id = questions[0].question.question_id
