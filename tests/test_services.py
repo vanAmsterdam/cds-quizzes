@@ -12,6 +12,7 @@ from cds_quizzes.services import (
     get_individual_drafts,
     get_or_create_real_session,
     monitor_rows,
+    next_unfinished_assignment,
     remaining_seconds,
     reset_student_state,
     save_individual_drafts,
@@ -73,6 +74,33 @@ def test_real_round_session_is_created_only_when_explicitly_started(db):
     session = get_or_create_real_session(db, "demo_a", "Round 1")
 
     assert session.individual_started_at is not None
+
+
+def test_next_unfinished_assignment_locks_round2_until_round1_done(db):
+    assert next_unfinished_assignment(db, "demo_a").round_id == "Round 1"
+
+    question_ids = answer_all(db, "demo_a", "Round 1")
+    assert next_unfinished_assignment(db, "demo_a").round_id == "Round 1"
+
+    select_discussion_question(db, "demo_a", "Round 1", question_ids[0])
+    assert next_unfinished_assignment(db, "demo_a").round_id == "Round 1"
+
+    submit_revision(db, "demo_a", "Round 1", question_ids[0], "B")
+    db.flush()
+    assert next_unfinished_assignment(db, "demo_a").round_id == "Round 2"
+
+
+def test_next_unfinished_assignment_returns_none_after_all_rounds_done(db):
+    question_ids = answer_all(db, "demo_a", "Round 1")
+    select_discussion_question(db, "demo_a", "Round 1", question_ids[0])
+    submit_revision(db, "demo_a", "Round 1", question_ids[0], "B")
+
+    answer_all(db, "demo_a", "Round 2")
+    session = db.get(QuizSession, {"student_id": "demo_a", "round_id": "Round 2"})
+    submit_revision(db, "demo_a", "Round 2", session.selected_question_id, "B")
+    db.flush()
+
+    assert next_unfinished_assignment(db, "demo_a") is None
 
 
 def test_saved_drafts_are_finalized_when_individual_phase_completes(db):

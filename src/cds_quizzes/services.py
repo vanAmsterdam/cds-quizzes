@@ -59,6 +59,14 @@ def list_student_assignments(db: Session, student_id: str) -> list[Assignment]:
     return sorted(rows, key=lambda row: round_sort_key(row.round_id))
 
 
+def next_unfinished_assignment(db: Session, student_id: str) -> Assignment | None:
+    for assignment in list_student_assignments(db, student_id):
+        session = db.get(QuizSession, {"student_id": student_id, "round_id": assignment.round_id})
+        if session is None or session.phase != PHASE_DONE:
+            return assignment
+    return None
+
+
 def get_assignment(db: Session, student_id: str, round_id: str) -> Assignment:
     assignment = db.get(Assignment, {"student_id": student_id, "round_id": round_id})
     if assignment is None:

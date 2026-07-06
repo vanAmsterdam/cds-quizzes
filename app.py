@@ -36,7 +36,7 @@ from cds_quizzes.services import (
     get_question,
     get_student,
     is_round0_complete,
-    list_student_assignments,
+    next_unfinished_assignment,
     question_options,
     remaining_seconds,
     save_individual_drafts,
@@ -81,7 +81,7 @@ def render_app(db) -> None:
             st.write(f"Group: `{student.group_id}`")
         if st.button("Sign out"):
             for key in list(st.session_state):
-                if key.startswith(("orig:", "rev:", "round0:")) or key in {"student_id", "selected_round"}:
+                if key.startswith(("orig:", "rev:", "round0:")) or key == "student_id":
                     st.session_state.pop(key, None)
             st.rerun()
 
@@ -90,7 +90,7 @@ def render_app(db) -> None:
         render_round0(db, student.student_id)
         return
 
-    render_round_selector(db, student.student_id)
+    render_current_round(db, student.student_id)
 
 
 def render_login(db) -> None:
@@ -135,22 +135,12 @@ def render_round0(db, student_id: str) -> None:
             st.error(str(exc))
 
 
-def render_round_selector(db, student_id: str) -> None:
-    assignments = list_student_assignments(db, student_id)
-    if not assignments:
-        st.error("No quiz rounds are assigned to this sign-in key.")
+def render_current_round(db, student_id: str) -> None:
+    assignment = next_unfinished_assignment(db, student_id)
+    if assignment is None:
+        st.success("All assigned rounds are submitted. Thank you.")
         return
-
-    round_ids = [assignment.round_id for assignment in assignments]
-    if st.session_state.get("selected_round") not in round_ids:
-        st.session_state["selected_round"] = round_ids[0]
-    selected_round = st.selectbox(
-        "Round",
-        round_ids,
-        index=round_ids.index(st.session_state["selected_round"]),
-        key="selected_round",
-    )
-    render_real_round(db, student_id, selected_round)
+    render_real_round(db, student_id, assignment.round_id)
 
 
 def render_real_round(db, student_id: str, round_id: str) -> None:
@@ -175,7 +165,7 @@ def render_round_start(db, student_id: str, round_id: str) -> None:
     st.subheader(f"{round_id}: ready")
     st.write("The 6 minute timer starts only after you press the button below.")
     st.warning("Do not press start until the instructor tells you to begin.")
-    if st.button("Start quizz now", type="primary"):
+    if st.button(start_button_label(round_id), type="primary"):
         try:
             get_or_create_real_session(db, student_id, round_id)
             db.commit()
@@ -183,6 +173,15 @@ def render_round_start(db, student_id: str, round_id: str) -> None:
         except WorkflowError as exc:
             db.rollback()
             st.error(str(exc))
+
+
+def start_button_label(round_id: str) -> str:
+    normalized = round_id.strip().lower()
+    if normalized == "round 2":
+        return "Start round 2 now"
+    if normalized == "round 1":
+        return "Start round 1 now"
+    return f"Start {round_id} now"
 
 
 def render_individual_phase(db, student_id: str, round_id: str, session) -> None:

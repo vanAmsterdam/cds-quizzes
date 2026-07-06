@@ -83,11 +83,11 @@ Each `sign_in_key` belongs to exactly one student. Add one row per student and q
 
 1. Student signs in with a key.
 2. Student completes Round 0 answer check.
-3. Student chooses an assigned round.
-4. Student clicks `Start quizz now`; this starts the 6-minute timer.
+3. Student sees the next unlocked assigned round only.
+4. Student clicks `Start round 1 now` or `Start round 2 now`; this starts that round's 6-minute timer.
 5. Individual phase: six questions, six-minute timer based on database start time.
 6. Round 1: student permanently selects one question for discussion.
-7. Round 2: app randomly selects one assigned question for discussion.
+7. Round 2 remains locked until Round 1 revision is submitted; then the app randomly selects one assigned question for discussion.
 8. Revision phase: only the selected question is editable.
 9. Done phase: all answers are locked.
 
