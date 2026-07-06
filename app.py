@@ -15,8 +15,7 @@ try:
 except Exception:  # pragma: no cover - optional UI fallback
     st_autorefresh = None
 
-from cds_quizzes.bootstrap import initialize_app_data
-from cds_quizzes.database import database_now, get_session_factory
+from cds_quizzes.database import get_session_factory
 from cds_quizzes.models import (
     PHASE_DONE,
     PHASE_INDIVIDUAL,
@@ -42,10 +41,14 @@ from cds_quizzes.services import (
     submit_revision,
     submit_round0,
 )
+from cds_quizzes.streamlit_runtime import initialize_streamlit_app_data
+from cds_quizzes.timezone import amsterdam_now
 
+
+TIMER_REFRESH_INTERVAL_MS = 10_000
 
 st.set_page_config(page_title="Classroom Quiz", page_icon=":material/school:", layout="centered")
-initialize_app_data()
+initialize_streamlit_app_data()
 
 
 def main() -> None:
@@ -157,21 +160,20 @@ def render_real_round(db, student_id: str, round_id: str) -> None:
         return
 
     if session.phase == PHASE_INDIVIDUAL:
-        render_individual_phase(db, student_id, round_id)
+        render_individual_phase(db, student_id, round_id, session)
     elif session.phase == PHASE_SELECT_DISCUSSION:
         render_selection_phase(db, student_id, round_id)
     elif session.phase == PHASE_REVISION:
-        render_revision_phase(db, student_id, round_id)
+        render_revision_phase(db, student_id, round_id, session)
     elif session.phase == PHASE_DONE:
         render_done_phase(db, student_id, round_id)
     else:
         st.error(f"Unknown session phase: {session.phase}")
 
 
-def render_individual_phase(db, student_id: str, round_id: str) -> None:
-    session = get_or_create_real_session(db, student_id, round_id)
+def render_individual_phase(db, student_id: str, round_id: str, session) -> None:
     questions = get_assigned_questions(db, student_id, round_id)
-    now = database_now(db)
+    now = amsterdam_now()
     remaining = remaining_seconds(session, now)
 
     st.subheader(f"{round_id}: individual phase")
@@ -180,7 +182,7 @@ def render_individual_phase(db, student_id: str, round_id: str) -> None:
         st.metric("Time remaining", f"{mins}:{secs:02d}")
         st.progress(remaining / 360)
         if st_autorefresh is not None:
-            st_autorefresh(interval=1000, key=f"timer:{student_id}:{round_id}")
+            st_autorefresh(interval=TIMER_REFRESH_INTERVAL_MS, key=f"timer:{student_id}:{round_id}")
     else:
         st.warning("Time is up. Saving the answers currently on this page.")
         submit_individual_from_widgets(db, student_id, round_id, questions)
@@ -249,9 +251,8 @@ def render_selection_phase(db, student_id: str, round_id: str) -> None:
             st.error(str(exc))
 
 
-def render_revision_phase(db, student_id: str, round_id: str) -> None:
+def render_revision_phase(db, student_id: str, round_id: str, session) -> None:
     st.subheader(f"{round_id}: revision phase")
-    session = get_or_create_real_session(db, student_id, round_id)
     questions = get_assigned_questions(db, student_id, round_id)
     answers = get_answers(db, student_id, round_id)
     selected_id = session.selected_question_id

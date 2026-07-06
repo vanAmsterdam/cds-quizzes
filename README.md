@@ -93,6 +93,12 @@ Timestamps recorded by the app use Europe/Amsterdam local time by default.
 - `Admin` page reset tab: reset one student's sessions and answers while keeping roster assignments.
 - `Live Monitor` page: auto-refreshing roster view with sign-in status, Round 0 completion, current phase, answer counts, and last saved time.
 
+## Diagnosing Cloud Performance
+
+- Use `Manage app` in the lower-right corner of the deployed app to inspect Streamlit Cloud logs.
+- The individual-phase timer polls every 10 seconds; the saved database start time remains the source of truth.
+- Startup table creation and seed checks are cached per Streamlit process, so normal reruns should not repeatedly run setup queries.
+
 ## Tests
 
 ```bash

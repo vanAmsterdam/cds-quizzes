@@ -17,13 +17,13 @@ except Exception:  # pragma: no cover - optional UI fallback
     st_autorefresh = None
 
 from cds_quizzes.admin_auth import require_admin
-from cds_quizzes.bootstrap import initialize_app_data
 from cds_quizzes.database import get_session_factory
 from cds_quizzes.services import monitor_rows
+from cds_quizzes.streamlit_runtime import initialize_streamlit_app_data
 
 
 st.set_page_config(page_title="Live Monitor", page_icon=":material/monitoring:", layout="wide")
-initialize_app_data()
+initialize_streamlit_app_data()
 require_admin()
 
 st.title("Live Monitor")

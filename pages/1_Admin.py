@@ -12,7 +12,6 @@ import streamlit as st
 from sqlalchemy import func, select
 
 from cds_quizzes.admin_auth import require_admin
-from cds_quizzes.bootstrap import initialize_app_data
 from cds_quizzes.config import DEFAULT_SAMPLE_ROSTER_PATH, DEFAULT_WORKBOOK_PATH
 from cds_quizzes.database import get_session_factory
 from cds_quizzes.exports import (
@@ -25,6 +24,7 @@ from cds_quizzes.exports import (
 from cds_quizzes.importers import import_roster, import_workbook
 from cds_quizzes.models import Answer, Assignment, FormQuestion, QuizSession, Student
 from cds_quizzes.services import WorkflowError, reset_student_state
+from cds_quizzes.streamlit_runtime import initialize_streamlit_app_data
 
 
 def run_import(db, importer, source, message: str) -> None:
@@ -72,7 +72,7 @@ def run_student_reset(db, student_id: str, confirmation: str) -> None:
 
 
 st.set_page_config(page_title="Admin", page_icon=":material/admin_panel_settings:", layout="wide")
-initialize_app_data()
+initialize_streamlit_app_data()
 require_admin()
 
 st.title("Admin")
