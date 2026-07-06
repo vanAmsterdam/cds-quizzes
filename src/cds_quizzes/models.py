@@ -122,3 +122,13 @@ class Answer(Base):
     selected_for_discussion: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     revised_answer: Mapped[str | None] = mapped_column(Text)
     revised_saved_at: Mapped[object | None] = mapped_column(DateTime)
+
+
+class DraftAnswer(Base):
+    __tablename__ = "draft_answers"
+
+    student_id: Mapped[str] = mapped_column(ForeignKey("students.student_id"), primary_key=True)
+    round_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    question_id: Mapped[str] = mapped_column(ForeignKey("questions.question_id"), primary_key=True)
+    draft_answer: Mapped[str | None] = mapped_column(Text)
+    draft_saved_at: Mapped[object | None] = mapped_column(DateTime)

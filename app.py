@@ -30,6 +30,7 @@ from cds_quizzes.services import (
     complete_individual_phase,
     get_answers,
     get_assigned_questions,
+    get_individual_drafts,
     get_or_create_real_session,
     get_question,
     get_student,
@@ -37,6 +38,7 @@ from cds_quizzes.services import (
     list_student_assignments,
     question_options,
     remaining_seconds,
+    save_individual_drafts,
     select_discussion_question,
     submit_revision,
     submit_round0,
@@ -173,6 +175,7 @@ def render_real_round(db, student_id: str, round_id: str) -> None:
 
 def render_individual_phase(db, student_id: str, round_id: str, session) -> None:
     questions = get_assigned_questions(db, student_id, round_id)
+    drafts = get_individual_drafts(db, student_id, round_id)
     now = amsterdam_now()
     remaining = remaining_seconds(session, now)
 
@@ -188,27 +191,25 @@ def render_individual_phase(db, student_id: str, round_id: str, session) -> None
         submit_individual_from_widgets(db, student_id, round_id, questions)
         return
 
-    st.write("Answer all six questions. You may edit answers until you submit or time expires.")
+    st.write("Answer all six questions. Answers are auto-saved until you submit or time expires.")
     for item in questions:
         render_question_block(item.order, item.question)
         render_answer_widget(
             item.question,
             original_widget_key(student_id, round_id, item.question.question_id),
-            default="",
+            default=drafts.get(item.question.question_id, ""),
         )
+
+    current_answers = collect_individual_answers_from_widgets(student_id, round_id, questions)
+    if not persist_individual_drafts_if_changed(db, student_id, round_id, current_answers):
+        return
 
     if st.button("Submit original answers", type="primary"):
         submit_individual_from_widgets(db, student_id, round_id, questions)
 
 
 def submit_individual_from_widgets(db, student_id: str, round_id: str, questions) -> None:
-    answers = {
-        item.question.question_id: st.session_state.get(
-            original_widget_key(student_id, round_id, item.question.question_id),
-            "",
-        )
-        for item in questions
-    }
+    answers = collect_individual_answers_from_widgets(student_id, round_id, questions)
     try:
         complete_individual_phase(db, student_id, round_id, answers)
         db.commit()
@@ -217,6 +218,39 @@ def submit_individual_from_widgets(db, student_id: str, round_id: str, questions
     except WorkflowError as exc:
         db.rollback()
         st.error(str(exc))
+
+
+def collect_individual_answers_from_widgets(student_id: str, round_id: str, questions) -> dict[str, str | None]:
+    answers: dict[str, str | None] = {}
+    for item in questions:
+        key = original_widget_key(student_id, round_id, item.question.question_id)
+        answers[item.question.question_id] = st.session_state[key] if key in st.session_state else None
+    return answers
+
+
+def persist_individual_drafts_if_changed(
+    db,
+    student_id: str,
+    round_id: str,
+    answers: dict[str, str | None],
+) -> bool:
+    if all(value is None for value in answers.values()):
+        return True
+
+    snapshot_key = f"draft_snapshot:{student_id}:{round_id}"
+    snapshot = tuple(sorted(answers.items()))
+    if st.session_state.get(snapshot_key) == snapshot:
+        return True
+
+    try:
+        save_individual_drafts(db, student_id, round_id, answers)
+        db.commit()
+        st.session_state[snapshot_key] = snapshot
+        return True
+    except WorkflowError as exc:
+        db.rollback()
+        st.error(str(exc))
+        return False
 
 
 def render_selection_phase(db, student_id: str, round_id: str) -> None:

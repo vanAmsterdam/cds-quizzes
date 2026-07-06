@@ -19,6 +19,7 @@ from .models import (
     ROUND0_QUESTION_ID,
     Answer,
     Assignment,
+    DraftAnswer,
     FormQuestion,
     Question,
     QuizSession,
@@ -156,13 +157,14 @@ def remaining_seconds(session: QuizSession, now: datetime | None = None) -> int:
     return max(0, INDIVIDUAL_DURATION_SECONDS - elapsed)
 
 
-def complete_individual_phase(db: Session, student_id: str, round_id: str, answers: dict[str, str]) -> None:
+def complete_individual_phase(db: Session, student_id: str, round_id: str, answers: dict[str, str | None]) -> None:
     session = get_or_create_real_session(db, student_id, round_id)
     if session.phase != PHASE_INDIVIDUAL:
         raise WorkflowError("Original answers are locked for this session.")
 
     assigned = get_assigned_questions(db, student_id, round_id)
     question_ids = [item.question.question_id for item in assigned]
+    drafts = get_individual_drafts(db, student_id, round_id)
     now = database_now(db)
     for question_id in question_ids:
         answer = db.get(Answer, {"student_id": student_id, "round_id": round_id, "question_id": question_id})
@@ -170,7 +172,10 @@ def complete_individual_phase(db: Session, student_id: str, round_id: str, answe
             answer = Answer(student_id=student_id, round_id=round_id, question_id=question_id)
         if answer.original_saved_at is not None:
             raise WorkflowError("Original answers have already been saved.")
-        answer.original_answer = normalize_answer_value(answers.get(question_id))
+        submitted_answer = answers.get(question_id)
+        if submitted_answer is None:
+            submitted_answer = drafts.get(question_id, "")
+        answer.original_answer = normalize_answer_value(submitted_answer)
         answer.original_saved_at = now
         db.merge(answer)
 
@@ -183,6 +188,7 @@ def complete_individual_phase(db: Session, student_id: str, round_id: str, answe
     else:
         session.phase = PHASE_SELECT_DISCUSSION
     session.updated_at = now
+    db.execute(delete(DraftAnswer).where(DraftAnswer.student_id == student_id, DraftAnswer.round_id == round_id))
 
 
 def select_discussion_question(db: Session, student_id: str, round_id: str, question_id: str) -> None:
@@ -229,6 +235,48 @@ def get_answers(db: Session, student_id: str, round_id: str) -> dict[str, Answer
     return {answer.question_id: answer for answer in answers}
 
 
+def get_individual_drafts(db: Session, student_id: str, round_id: str) -> dict[str, str]:
+    drafts = db.execute(
+        select(DraftAnswer).where(DraftAnswer.student_id == student_id, DraftAnswer.round_id == round_id)
+    ).scalars()
+    return {draft.question_id: draft.draft_answer or "" for draft in drafts}
+
+
+def save_individual_drafts(db: Session, student_id: str, round_id: str, answers: dict[str, str | None]) -> bool:
+    session = get_or_create_real_session(db, student_id, round_id)
+    if session.phase != PHASE_INDIVIDUAL:
+        raise WorkflowError("Draft answers can only be saved during the individual phase.")
+
+    assigned_ids = {item.question.question_id for item in get_assigned_questions(db, student_id, round_id)}
+    unknown_ids = set(answers) - assigned_ids
+    if unknown_ids:
+        raise WorkflowError("Draft answers include questions that are not assigned to this student.")
+
+    existing = {
+        draft.question_id: draft
+        for draft in db.execute(
+            select(DraftAnswer).where(DraftAnswer.student_id == student_id, DraftAnswer.round_id == round_id)
+        ).scalars()
+    }
+    now = None
+    changed = False
+    for question_id, value in answers.items():
+        if value is None:
+            continue
+        normalized = normalize_answer_value(value)
+        draft = existing.get(question_id)
+        if draft is None:
+            draft = DraftAnswer(student_id=student_id, round_id=round_id, question_id=question_id)
+            db.add(draft)
+        if draft.draft_answer != normalized:
+            if now is None:
+                now = database_now(db)
+            draft.draft_answer = normalized
+            draft.draft_saved_at = now
+            changed = True
+    return changed
+
+
 def get_question(db: Session, question_id: str) -> Question | None:
     return db.get(Question, question_id)
 
@@ -263,6 +311,7 @@ def reset_student_state(db: Session, student_id: str) -> None:
     if student is None:
         raise WorkflowError("Unknown student.")
     db.execute(delete(Answer).where(Answer.student_id == student_id))
+    db.execute(delete(DraftAnswer).where(DraftAnswer.student_id == student_id))
     db.execute(delete(QuizSession).where(QuizSession.student_id == student_id))
     student.last_seen_at = None
 

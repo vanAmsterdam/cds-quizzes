@@ -3,15 +3,18 @@ from __future__ import annotations
 import pytest
 
 from cds_quizzes.exports import joined_long_dataframe
-from cds_quizzes.models import PHASE_DONE, PHASE_REVISION, QuizSession
+from cds_quizzes.models import PHASE_DONE, PHASE_REVISION, DraftAnswer, QuizSession
 from cds_quizzes.services import (
     WorkflowError,
     complete_individual_phase,
+    get_answers,
     get_assigned_questions,
+    get_individual_drafts,
     get_or_create_real_session,
     monitor_rows,
     remaining_seconds,
     reset_student_state,
+    save_individual_drafts,
     select_discussion_question,
     submit_revision,
     submit_round0,
@@ -64,6 +67,35 @@ def test_refresh_does_not_reset_individual_timer(db):
     assert 0 <= remaining_seconds(second) <= 360
 
 
+def test_saved_drafts_are_finalized_when_individual_phase_completes(db):
+    questions = get_assigned_questions(db, "demo_a", "Round 1")
+    first_id = questions[0].question.question_id
+    second_id = questions[1].question.question_id
+    save_individual_drafts(db, "demo_a", "Round 1", {first_id: "B", second_id: "A"})
+    db.flush()
+
+    complete_individual_phase(db, "demo_a", "Round 1", {item.question.question_id: None for item in questions})
+    db.flush()
+
+    answers = get_answers(db, "demo_a", "Round 1")
+    assert answers[first_id].original_answer == "B"
+    assert answers[second_id].original_answer == "A"
+    assert answers[first_id].original_saved_at is not None
+    assert get_individual_drafts(db, "demo_a", "Round 1") == {}
+
+
+def test_current_widget_values_override_saved_drafts_on_submit(db):
+    questions = get_assigned_questions(db, "demo_a", "Round 1")
+    first_id = questions[0].question.question_id
+    save_individual_drafts(db, "demo_a", "Round 1", {first_id: "B"})
+
+    complete_individual_phase(db, "demo_a", "Round 1", {first_id: "C"})
+    db.flush()
+
+    answers = get_answers(db, "demo_a", "Round 1")
+    assert answers[first_id].original_answer == "C"
+
+
 def test_round2_skips_selection_and_randomly_assigns_one_question(db):
     answer_all(db, "demo_a", "Round 2")
     session = db.get(QuizSession, {"student_id": "demo_a", "round_id": "Round 2"})
@@ -103,6 +135,8 @@ def test_joined_export_has_one_row_per_student_round_question(db):
 
 def test_reset_student_state_removes_sessions_and_answers_only_for_that_student(db):
     submit_round0(db, "demo_a", "A")
+    draft_question = get_assigned_questions(db, "demo_a", "Round 2")[0].question
+    save_individual_drafts(db, "demo_a", "Round 2", {draft_question.question_id: "A"})
     question_ids = answer_all(db, "demo_a", "Round 1")
     select_discussion_question(db, "demo_a", "Round 1", question_ids[0])
     submit_revision(db, "demo_a", "Round 1", question_ids[0], "B")
@@ -121,3 +155,4 @@ def test_reset_student_state_removes_sessions_and_answers_only_for_that_student(
     assert demo_a["revised_answers"] == 0
     assert len(get_assigned_questions(db, "demo_a", "Round 1")) == 6
     assert demo_b["round0_done"] is True
+    assert db.query(DraftAnswer).filter_by(student_id="demo_a").count() == 0
