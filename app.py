@@ -91,7 +91,7 @@ def render_login(db) -> None:
     st.title("Classroom Quiz")
     st.write("Enter your sign-in key to begin.")
     with st.form("login_form"):
-        key = st.text_input("Sign-in key", type="password")
+        key = st.text_input("Sign-in key")
         submitted = st.form_submit_button("Sign in", type="primary")
     if not submitted:
         return
