@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 import re
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Iterable
 
 from sqlalchemy import func, select
@@ -25,6 +25,7 @@ from .models import (
     Student,
 )
 from .security import hash_sign_in_key
+from .timezone import amsterdam_now
 
 INDIVIDUAL_DURATION_SECONDS = 360
 ROUND2_ID = "Round 2"
@@ -150,7 +151,7 @@ def submit_round0(db: Session, student_id: str, answer_value: str) -> None:
 def remaining_seconds(session: QuizSession, now: datetime | None = None) -> int:
     if session.individual_started_at is None:
         return INDIVIDUAL_DURATION_SECONDS
-    now = now or datetime.now(UTC).replace(tzinfo=None)
+    now = now or amsterdam_now()
     elapsed = int((now - session.individual_started_at).total_seconds())
     return max(0, INDIVIDUAL_DURATION_SECONDS - elapsed)
 

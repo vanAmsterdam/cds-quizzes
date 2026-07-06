@@ -84,6 +84,7 @@ Each `sign_in_key` belongs to exactly one student. Add one row per student and q
 8. Done phase: all answers are locked.
 
 The backend service layer enforces phase locks; disabled or hidden widgets are not trusted for correctness.
+Timestamps recorded by the app use Europe/Amsterdam local time by default.
 
 ## Admin And Monitoring
 

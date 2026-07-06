@@ -3,6 +3,7 @@ from __future__ import annotations
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
+from .timezone import amsterdam_now
 
 ROUND0_ID = "Round 0"
 ROUND0_QUESTION_ID = "ROUND0_CHECK"
@@ -30,7 +31,12 @@ class Student(Base):
     student_id: Mapped[str] = mapped_column(String(128), primary_key=True)
     sign_in_key_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
     group_id: Mapped[str | None] = mapped_column(String(128))
-    created_at: Mapped[object] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    created_at: Mapped[object] = mapped_column(
+        DateTime,
+        default=amsterdam_now,
+        server_default=func.now(),
+        nullable=False,
+    )
     last_seen_at: Mapped[object | None] = mapped_column(DateTime)
 
 
@@ -71,7 +77,12 @@ class Assignment(Base):
     student_id: Mapped[str] = mapped_column(ForeignKey("students.student_id"), primary_key=True)
     round_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     question_set_id: Mapped[str] = mapped_column(String(64), nullable=False)
-    created_at: Mapped[object] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    created_at: Mapped[object] = mapped_column(
+        DateTime,
+        default=amsterdam_now,
+        server_default=func.now(),
+        nullable=False,
+    )
 
 
 class QuizSession(Base):
@@ -86,8 +97,18 @@ class QuizSession(Base):
     selection_confirmed_at: Mapped[object | None] = mapped_column(DateTime)
     revision_submitted_at: Mapped[object | None] = mapped_column(DateTime)
     done_at: Mapped[object | None] = mapped_column(DateTime)
-    created_at: Mapped[object] = mapped_column(DateTime, server_default=func.now(), nullable=False)
-    updated_at: Mapped[object] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    created_at: Mapped[object] = mapped_column(
+        DateTime,
+        default=amsterdam_now,
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at: Mapped[object] = mapped_column(
+        DateTime,
+        default=amsterdam_now,
+        server_default=func.now(),
+        nullable=False,
+    )
 
 
 class Answer(Base):

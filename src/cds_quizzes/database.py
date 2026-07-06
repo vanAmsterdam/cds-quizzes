@@ -1,16 +1,17 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import datetime
 from functools import lru_cache
 from typing import Iterator
 
-from sqlalchemy import create_engine, func, select
+from sqlalchemy import create_engine, event, func, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from .config import DATA_DIR, get_settings
 from .models import Base, PHASE_DONE, ROUND0_ID, ROUND0_QUESTION_ID, Question
+from .timezone import APP_TIMEZONE_NAME, amsterdam_now, to_amsterdam_naive
 
 
 @lru_cache(maxsize=1)
@@ -18,7 +19,10 @@ def get_engine() -> Engine:
     settings = get_settings()
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     connect_args = {"check_same_thread": False} if settings.is_sqlite else {}
-    return create_engine(settings.database_url, connect_args=connect_args, future=True)
+    engine = create_engine(settings.database_url, connect_args=connect_args, future=True)
+    if not settings.is_sqlite:
+        _configure_postgres_timezone(engine)
+    return engine
 
 
 @lru_cache(maxsize=1)
@@ -67,12 +71,24 @@ def seed_round0_question(db: Session) -> None:
 
 
 def database_now(db: Session) -> datetime:
+    if db.get_bind().dialect.name == "sqlite":
+        return amsterdam_now()
     value = db.execute(select(func.now())).scalar_one()
     if isinstance(value, datetime):
-        return value.replace(tzinfo=None)
+        return to_amsterdam_naive(value)
     if isinstance(value, str):
-        return datetime.fromisoformat(value.replace("Z", "+00:00")).replace(tzinfo=None)
-    return datetime.now(UTC).replace(tzinfo=None)
+        return to_amsterdam_naive(datetime.fromisoformat(value.replace("Z", "+00:00")))
+    return amsterdam_now()
+
+
+def _configure_postgres_timezone(engine: Engine) -> None:
+    @event.listens_for(engine, "connect")
+    def set_timezone(dbapi_connection, _connection_record) -> None:
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute(f"SET TIME ZONE '{APP_TIMEZONE_NAME}'")
+        finally:
+            cursor.close()
 
 
 def reset_connection_cache() -> None:
