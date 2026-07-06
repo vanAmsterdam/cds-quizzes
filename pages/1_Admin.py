@@ -12,7 +12,13 @@ import streamlit as st
 from sqlalchemy import func, select
 
 from cds_quizzes.admin_auth import require_admin
-from cds_quizzes.config import DEFAULT_SAMPLE_ROSTER_PATH, DEFAULT_WORKBOOK_PATH
+from cds_quizzes.bootstrap import import_default_class_data
+from cds_quizzes.config import (
+    DEFAULT_CLASS_FORM_QUESTIONS_PATH,
+    DEFAULT_CLASS_ROSTER_PATH,
+    DEFAULT_SAMPLE_ROSTER_PATH,
+    DEFAULT_WORKBOOK_PATH,
+)
 from cds_quizzes.database import get_session_factory
 from cds_quizzes.exports import (
     answers_dataframe,
@@ -32,6 +38,19 @@ def run_import(db, importer, source, message: str) -> None:
         summary = importer(db, source)
         db.commit()
         st.success(f"{message} {summary}")
+    except Exception as exc:
+        db.rollback()
+        st.error(str(exc))
+
+
+def run_default_class_import(db) -> None:
+    try:
+        workbook_summary, form_summary, roster_summary = import_default_class_data(db)
+        db.commit()
+        st.success(
+            "Bundled classroom setup imported. "
+            f"Workbook: {workbook_summary}; forms: {form_summary}; roster: {roster_summary}"
+        )
     except Exception as exc:
         db.rollback()
         st.error(str(exc))
@@ -80,18 +99,33 @@ db = get_session_factory()()
 try:
     tabs = st.tabs(["Setup", "Resets", "Exports", "Status"])
     with tabs[0]:
+        st.subheader("Bundled classroom setup")
+        if DEFAULT_CLASS_FORM_QUESTIONS_PATH.exists() and DEFAULT_CLASS_ROSTER_PATH.exists():
+            st.caption(
+                f"Bundled generated forms: `{DEFAULT_CLASS_FORM_QUESTIONS_PATH.relative_to(ROOT)}`; "
+                f"bundled roster: `{DEFAULT_CLASS_ROSTER_PATH.relative_to(ROOT)}`"
+            )
+            if st.button("Import bundled classroom forms and roster", type="primary"):
+                run_default_class_import(db)
+        else:
+            st.warning("Bundled classroom roster files are not present in this deployment.")
+
         st.subheader("Question bank")
         if DEFAULT_WORKBOOK_PATH.exists():
             st.caption(f"Bundled workbook: `{DEFAULT_WORKBOOK_PATH.relative_to(ROOT)}`")
             if st.button("Import bundled workbook"):
                 run_import(db, import_workbook, DEFAULT_WORKBOOK_PATH, "Workbook imported.")
-        uploaded_workbook = st.file_uploader("Upload replacement workbook", type=["xlsx"])
+        uploaded_workbook = st.file_uploader("Upload replacement workbook", type=["xlsx"], key="workbook_upload")
         if uploaded_workbook and st.button("Import uploaded workbook"):
             run_import(db, import_workbook, uploaded_workbook, "Workbook imported.")
 
         st.subheader("Generated team forms")
         st.write("Import the generated form-question CSV before importing its matching roster CSV.")
-        uploaded_form_questions = st.file_uploader("Upload generated form-question CSV", type=["csv"])
+        uploaded_form_questions = st.file_uploader(
+            "Upload generated form-question CSV",
+            type=["csv"],
+            key="form_questions_upload",
+        )
         if uploaded_form_questions and st.button("Import generated form-question CSV"):
             run_import(db, import_form_questions, uploaded_form_questions, "Generated form questions imported.")
 
@@ -100,7 +134,7 @@ try:
             st.caption(f"Sample roster: `{DEFAULT_SAMPLE_ROSTER_PATH.relative_to(ROOT)}`")
             if st.button("Import sample roster"):
                 run_import(db, import_roster, DEFAULT_SAMPLE_ROSTER_PATH, "Sample roster imported.")
-        uploaded_roster = st.file_uploader("Upload roster CSV", type=["csv"])
+        uploaded_roster = st.file_uploader("Upload roster CSV", type=["csv"], key="roster_upload")
         if uploaded_roster and st.button("Import roster CSV"):
             run_import(db, import_roster, uploaded_roster, "Roster imported.")
 

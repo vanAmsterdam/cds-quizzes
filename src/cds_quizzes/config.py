@@ -11,6 +11,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = PROJECT_ROOT / "data"
 DEFAULT_WORKBOOK_PATH = DATA_DIR / "causal_dag_peer_discussion_question_bank.xlsx"
 DEFAULT_SAMPLE_ROSTER_PATH = DATA_DIR / "sample_roster.csv"
+DEFAULT_CLASS_FORM_QUESTIONS_PATH = DATA_DIR / "class_form_questions.csv"
+DEFAULT_CLASS_ROSTER_PATH = DATA_DIR / "class_roster.csv"
 DEFAULT_SQLITE_PATH = DATA_DIR / "dev.sqlite"
 
 

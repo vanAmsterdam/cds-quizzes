@@ -52,12 +52,10 @@ After first deploy:
 
 1. Open the app.
 2. Go to the `Admin` page.
-3. Import the bundled workbook if it is not already loaded.
-4. Upload the private generated form-question CSV.
-5. Upload the private roster CSV.
-6. Open `Live Monitor` while students complete Round 0.
+3. Click `Import bundled classroom forms and roster`.
+4. Open `Live Monitor` while students complete Round 0.
 
-Do not commit `.streamlit/secrets.toml`, `data/dev.sqlite`, or private roster CSVs.
+Do not commit `.streamlit/secrets.toml`, `data/dev.sqlite`, or ad hoc private roster CSVs.
 
 Files that should be committed:
 
@@ -65,6 +63,7 @@ Files that should be committed:
 - `requirements.txt`, `pytest.ini`, `.gitignore`
 - `.streamlit/secrets.toml.example`
 - `data/causal_dag_peer_discussion_question_bank.xlsx`
+- `data/class_form_questions.csv`, `data/class_roster.csv`, `data/class_slips.html`, `data/class_slips_index.csv`
 - `data/sample_roster.csv`
 - `README.md`, `instruction.md`, `question_bank_context.md`
 
@@ -82,7 +81,14 @@ Each `sign_in_key` belongs to exactly one student. Add one row per student and q
 
 ## Private Classroom Roster And Slips
 
-Generate a 28-student classroom roster, four predictable test groups, and printable grouped login slips with:
+The current classroom roster and generated assignments are bundled in the repo:
+
+- `data/class_roster.csv`: production roster used by the Admin bundled setup button.
+- `data/class_form_questions.csv`: team-specific generated form assignments used by the Admin bundled setup button.
+- `data/class_slips.html`: print/cut login slips.
+- `data/class_slips_index.csv`: instructor-only index of groups, roles, login IDs, and assigned forms.
+
+To generate an alternative private roster, run:
 
 ```bash
 python tools/generate_roster_materials.py

@@ -16,6 +16,10 @@ from cds_quizzes.models import Assignment, Base, FormQuestion, Student
 
 ROOT = Path(__file__).resolve().parents[1]
 GENERATOR = ROOT / "tools" / "generate_roster_materials.py"
+CLASS_ROSTER = ROOT / "data" / "class_roster.csv"
+CLASS_FORM_QUESTIONS = ROOT / "data" / "class_form_questions.csv"
+CLASS_SLIPS_HTML = ROOT / "data" / "class_slips.html"
+CLASS_SLIPS_INDEX = ROOT / "data" / "class_slips_index.csv"
 
 
 def test_roster_material_generator_outputs_valid_default_files(tmp_path: Path):
@@ -143,3 +147,65 @@ def test_roster_material_generator_outputs_valid_default_files(tmp_path: Path):
     assert student_count == 40
     assert assignment_count == 80
     assert form_question_count == 516
+
+
+def test_bundled_class_roster_imports_cleanly(tmp_path: Path):
+    assert CLASS_ROSTER.exists()
+    assert CLASS_FORM_QUESTIONS.exists()
+    assert CLASS_SLIPS_HTML.exists()
+    assert CLASS_SLIPS_INDEX.exists()
+
+    with CLASS_FORM_QUESTIONS.open(newline="", encoding="utf-8") as handle:
+        form_rows = list(csv.DictReader(handle))
+    with CLASS_ROSTER.open(newline="", encoding="utf-8") as handle:
+        roster_rows = list(csv.DictReader(handle))
+
+    assert len(roster_rows) == 80
+    assert len(form_rows) == 480
+    assert {row["sign_in_key"] for row in roster_rows if row["sign_in_key"].startswith("test")} == {
+        "testaa",
+        "testab",
+        "testac",
+        "testba",
+        "testbb",
+        "testbc",
+        "testca",
+        "testcb",
+        "testcc",
+        "testda",
+        "testdb",
+        "testdc",
+    }
+
+    for form_key in {(row["round_id"], row["question_set_id"]) for row in form_rows}:
+        rows = [row for row in form_rows if (row["round_id"], row["question_set_id"]) == form_key]
+        assert sorted(row["stratum"] for row in rows) == ["easier", "easier", "harder", "harder", "hardest", "hardest"]
+
+    first_group_questions: set[str] | None = None
+    for group_id in sorted({row["group_id"] for row in form_rows}):
+        group_questions = {row["question_id"] for row in form_rows if row["group_id"] == group_id}
+        assert len(group_questions) == 36
+        if first_group_questions is None:
+            first_group_questions = group_questions
+        else:
+            assert group_questions == first_group_questions
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'bundled_roster.sqlite'}", future=True)
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine, expire_on_commit=False, autoflush=False, future=True)
+    session = Session()
+    try:
+        seed_round0_question(session)
+        import_workbook(session, DEFAULT_WORKBOOK_PATH)
+        import_form_questions(session, CLASS_FORM_QUESTIONS)
+        import_roster(session, CLASS_ROSTER)
+        session.commit()
+
+        student_count = session.execute(select(func.count()).select_from(Student)).scalar_one()
+        assignment_count = session.execute(select(func.count()).select_from(Assignment)).scalar_one()
+    finally:
+        session.close()
+        engine.dispose()
+
+    assert student_count == 40
+    assert assignment_count == 80

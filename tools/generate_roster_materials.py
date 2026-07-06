@@ -282,6 +282,7 @@ def write_roster_csv(path: Path, participants: Iterable[Participant]) -> None:
         writer = csv.DictWriter(
             handle,
             fieldnames=("student_id", "sign_in_key", "group_id", "round_id", "question_set_id"),
+            lineterminator="\n",
         )
         writer.writeheader()
         for participant in participants:
@@ -311,6 +312,7 @@ def write_form_questions_csv(path: Path, assignments: Iterable[FormQuestionAssig
                 "difficulty",
                 "stratum",
             ),
+            lineterminator="\n",
         )
         writer.writeheader()
         for assignment in assignments:
@@ -340,6 +342,7 @@ def write_slips_index_csv(path: Path, participants: Iterable[Participant]) -> No
                 "round_1_question_set_id",
                 "round_2_question_set_id",
             ),
+            lineterminator="\n",
         )
         writer.writeheader()
         for participant in participants:
