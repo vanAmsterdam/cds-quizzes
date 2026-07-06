@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 import pytest
+from sqlalchemy import event
 
 from cds_quizzes.exports import joined_long_dataframe
 from cds_quizzes.models import PHASE_DISCUSSION, PHASE_DONE, PHASE_REVISION, DraftAnswer, QuizSession
@@ -53,6 +54,24 @@ def test_round0_answer_is_saved_and_visible_in_monitor(db):
     assert row["round0_done"] is True
     assert row["round0_answer"] == "A"
     assert row["round0_saved_at"] is not None
+
+
+def test_monitor_rows_uses_bulk_queries(db):
+    statements: list[str] = []
+    engine = db.get_bind()
+
+    def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+
+    event.listen(engine, "before_cursor_execute", before_cursor_execute)
+    try:
+        rows = monitor_rows(db)
+    finally:
+        event.remove(engine, "before_cursor_execute", before_cursor_execute)
+
+    select_count = sum(1 for statement in statements if statement.lstrip().upper().startswith("SELECT"))
+    assert len(rows) == 9
+    assert select_count <= 3
 
 
 def test_student_cannot_revise_non_selected_question(db):

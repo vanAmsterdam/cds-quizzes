@@ -365,15 +365,46 @@ def reset_student_state(db: Session, student_id: str) -> None:
 
 def monitor_rows(db: Session) -> list[dict[str, object]]:
     students = db.execute(select(Student).order_by(Student.group_id, Student.student_id)).scalars().all()
+    student_ids = [student.student_id for student in students]
+    if not student_ids:
+        return []
+
+    sessions = db.execute(select(QuizSession).where(QuizSession.student_id.in_(student_ids))).scalars().all()
+    answers = db.execute(select(Answer).where(Answer.student_id.in_(student_ids))).scalars().all()
+
+    round0_sessions: dict[str, QuizSession] = {}
+    latest_real_sessions: dict[str, QuizSession] = {}
+    for session in sessions:
+        if session.round_id == ROUND0_ID:
+            round0_sessions[session.student_id] = session
+            continue
+        current = latest_real_sessions.get(session.student_id)
+        if current is None or session.updated_at > current.updated_at:
+            latest_real_sessions[session.student_id] = session
+
+    round0_answers: dict[str, Answer] = {}
+    answer_stats = {
+        student_id: {"original_answers": 0, "revised_answers": 0, "last_answer_saved_at": None}
+        for student_id in student_ids
+    }
+    for answer in answers:
+        if answer.round_id == ROUND0_ID and answer.question_id == ROUND0_QUESTION_ID:
+            round0_answers[answer.student_id] = answer
+        stats = answer_stats[answer.student_id]
+        if answer.round_id != ROUND0_ID and answer.original_saved_at is not None:
+            stats["original_answers"] += 1
+        if answer.round_id != ROUND0_ID and answer.revised_saved_at is not None:
+            stats["revised_answers"] += 1
+        for saved_at in (answer.original_saved_at, answer.revised_saved_at):
+            if saved_at is not None and (stats["last_answer_saved_at"] is None or saved_at > stats["last_answer_saved_at"]):
+                stats["last_answer_saved_at"] = saved_at
+
     rows: list[dict[str, object]] = []
     for student in students:
-        round0 = db.get(QuizSession, {"student_id": student.student_id, "round_id": ROUND0_ID})
-        round0_answer = db.get(
-            Answer,
-            {"student_id": student.student_id, "round_id": ROUND0_ID, "question_id": ROUND0_QUESTION_ID},
-        )
-        current = _latest_real_session(db, student.student_id)
-        answer_stats = _answer_stats(db, student.student_id)
+        round0 = round0_sessions.get(student.student_id)
+        round0_answer = round0_answers.get(student.student_id)
+        current = latest_real_sessions.get(student.student_id)
+        stats = answer_stats[student.student_id]
         rows.append(
             {
                 "student_id": student.student_id,
@@ -385,9 +416,9 @@ def monitor_rows(db: Session) -> list[dict[str, object]]:
                 "round0_saved_at": round0_answer.original_saved_at if round0_answer else None,
                 "current_round": current.round_id if current else "",
                 "current_phase": current.phase if current else "",
-                "original_answers": answer_stats["original_answers"],
-                "revised_answers": answer_stats["revised_answers"],
-                "last_answer_saved_at": answer_stats["last_answer_saved_at"],
+                "original_answers": stats["original_answers"],
+                "revised_answers": stats["revised_answers"],
+                "last_answer_saved_at": stats["last_answer_saved_at"],
             }
         )
     return rows
@@ -419,29 +450,3 @@ def _choose_round2_question(question_ids: Iterable[str]) -> str:
     if not ordered:
         raise WorkflowError("Cannot randomly select from an empty question set.")
     return random.SystemRandom().choice(ordered)
-
-
-def _latest_real_session(db: Session, student_id: str) -> QuizSession | None:
-    return db.execute(
-        select(QuizSession)
-        .where(QuizSession.student_id == student_id, QuizSession.round_id != ROUND0_ID)
-        .order_by(QuizSession.updated_at.desc())
-        .limit(1)
-    ).scalar_one_or_none()
-
-
-def _answer_stats(db: Session, student_id: str) -> dict[str, object]:
-    answers = db.execute(select(Answer).where(Answer.student_id == student_id)).scalars().all()
-    original_count = sum(1 for answer in answers if answer.round_id != ROUND0_ID and answer.original_saved_at)
-    revised_count = sum(1 for answer in answers if answer.round_id != ROUND0_ID and answer.revised_saved_at)
-    saved_times = [
-        ts
-        for answer in answers
-        for ts in (answer.original_saved_at, answer.revised_saved_at)
-        if ts is not None
-    ]
-    return {
-        "original_answers": original_count,
-        "revised_answers": revised_count,
-        "last_answer_saved_at": max(saved_times) if saved_times else None,
-    }

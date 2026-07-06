@@ -28,7 +28,7 @@ require_admin()
 
 st.title("Live Monitor")
 auto_refresh = st.toggle("Auto-refresh", value=True)
-interval_seconds = st.slider("Refresh interval", min_value=2, max_value=30, value=5, step=1)
+interval_seconds = st.slider("Refresh interval", min_value=5, max_value=60, value=10, step=1)
 if auto_refresh and st_autorefresh is not None:
     st_autorefresh(interval=interval_seconds * 1000, key="live-monitor-refresh")
 elif auto_refresh:
