@@ -43,7 +43,16 @@ def get_settings() -> Settings:
         or _streamlit_secret("database", "url")
         or f"sqlite:///{DEFAULT_SQLITE_PATH}"
     )
+    database_url = _normalize_database_url(str(database_url))
     admin_password = os.getenv("CDS_ADMIN_PASSWORD") or _streamlit_secret("app", "admin_password")
     if not admin_password and database_url.startswith("sqlite"):
         admin_password = "admin"
-    return Settings(database_url=str(database_url), admin_password=admin_password)
+    return Settings(database_url=database_url, admin_password=admin_password)
+
+
+def _normalize_database_url(database_url: str) -> str:
+    if database_url.startswith("postgres://"):
+        return "postgresql+psycopg2://" + database_url.removeprefix("postgres://")
+    if database_url.startswith("postgresql://"):
+        return "postgresql+psycopg2://" + database_url.removeprefix("postgresql://")
+    return database_url
