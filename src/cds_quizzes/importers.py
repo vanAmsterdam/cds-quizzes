@@ -102,6 +102,10 @@ def import_workbook(db: Session, source: str | Path | BinaryIO) -> ImportSummary
         db.merge(question)
         question_count += 1
 
+    # Postgres checks the form_questions FK immediately, so make sure the
+    # referenced questions exist before inserting form mappings.
+    db.flush()
+
     form_count = 0
     seen_slots: set[tuple[str, str, int]] = set()
     for _, row in core.iterrows():
