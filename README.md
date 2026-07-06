@@ -40,6 +40,12 @@ admin_password = "replace-me"
 
 [database]
 url = "postgresql+psycopg2://postgres:<password>@<host>:5432/postgres"
+# Optional Postgres pool caps. These defaults are intentionally conservative
+# for Supabase session pooler limits.
+pool_size = 2
+max_overflow = 0
+pool_timeout = 10
+pool_recycle = 300
 ```
 
 After first deploy:
@@ -98,6 +104,7 @@ Timestamps recorded by the app use Europe/Amsterdam local time by default.
 - Use `Manage app` in the lower-right corner of the deployed app to inspect Streamlit Cloud logs.
 - The individual-phase timer polls every 10 seconds; the saved database start time remains the source of truth.
 - Startup table creation and seed checks are cached per Streamlit process, so normal reruns should not repeatedly run setup queries.
+- Supabase Postgres connections are capped at two pooled connections with no overflow by default to avoid session-pool `max clients reached` errors.
 
 ## Tests
 

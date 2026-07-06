@@ -18,6 +18,10 @@ DEFAULT_SQLITE_PATH = DATA_DIR / "dev.sqlite"
 class Settings:
     database_url: str
     admin_password: str | None
+    database_pool_size: int = 2
+    database_max_overflow: int = 0
+    database_pool_timeout: int = 10
+    database_pool_recycle: int = 300
 
     @property
     def is_sqlite(self) -> bool:
@@ -47,7 +51,14 @@ def get_settings() -> Settings:
     admin_password = os.getenv("CDS_ADMIN_PASSWORD") or _streamlit_secret("app", "admin_password")
     if not admin_password and database_url.startswith("sqlite"):
         admin_password = "admin"
-    return Settings(database_url=database_url, admin_password=admin_password)
+    return Settings(
+        database_url=database_url,
+        admin_password=admin_password,
+        database_pool_size=_int_setting("CDS_DATABASE_POOL_SIZE", ("database", "pool_size"), 2),
+        database_max_overflow=_int_setting("CDS_DATABASE_MAX_OVERFLOW", ("database", "max_overflow"), 0),
+        database_pool_timeout=_int_setting("CDS_DATABASE_POOL_TIMEOUT", ("database", "pool_timeout"), 10),
+        database_pool_recycle=_int_setting("CDS_DATABASE_POOL_RECYCLE", ("database", "pool_recycle"), 300),
+    )
 
 
 def _normalize_database_url(database_url: str) -> str:
@@ -56,3 +67,10 @@ def _normalize_database_url(database_url: str) -> str:
     if database_url.startswith("postgresql://"):
         return "postgresql+psycopg2://" + database_url.removeprefix("postgresql://")
     return database_url
+
+
+def _int_setting(env_name: str, secret_keys: tuple[str, str], default: int) -> int:
+    raw_value = os.getenv(env_name) or _streamlit_secret(*secret_keys)
+    if raw_value in (None, ""):
+        return default
+    return int(raw_value)

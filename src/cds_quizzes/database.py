@@ -6,7 +6,7 @@ from functools import lru_cache
 from typing import Iterator
 
 from sqlalchemy import create_engine, event, func, select
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import Session, sessionmaker
 
 from .config import DATA_DIR, get_settings
@@ -18,8 +18,23 @@ from .timezone import APP_TIMEZONE_NAME, amsterdam_now, to_amsterdam_naive
 def get_engine() -> Engine:
     settings = get_settings()
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    connect_args = {"check_same_thread": False} if settings.is_sqlite else {}
-    engine = create_engine(settings.database_url, connect_args=connect_args, future=True)
+    if settings.is_sqlite:
+        engine = create_engine(
+            settings.database_url,
+            connect_args={"check_same_thread": False},
+            future=True,
+        )
+    else:
+        engine = create_engine(
+            settings.database_url,
+            connect_args=_postgres_connect_args(settings.database_url),
+            pool_size=settings.database_pool_size,
+            max_overflow=settings.database_max_overflow,
+            pool_timeout=settings.database_pool_timeout,
+            pool_recycle=settings.database_pool_recycle,
+            pool_pre_ping=True,
+            future=True,
+        )
     if not settings.is_sqlite:
         _configure_postgres_timezone(engine)
     return engine
@@ -89,6 +104,17 @@ def _configure_postgres_timezone(engine: Engine) -> None:
             cursor.execute(f"SET TIME ZONE '{APP_TIMEZONE_NAME}'")
         finally:
             cursor.close()
+
+
+def _postgres_connect_args(database_url: str) -> dict[str, object]:
+    url = make_url(database_url)
+    query = dict(url.query)
+    connect_args: dict[str, object] = {"connect_timeout": 10}
+    if "gssencmode" not in query:
+        connect_args["gssencmode"] = "disable"
+    if "sslmode" not in query and "supabase" in (url.host or ""):
+        connect_args["sslmode"] = "require"
+    return connect_args
 
 
 def reset_connection_cache() -> None:
