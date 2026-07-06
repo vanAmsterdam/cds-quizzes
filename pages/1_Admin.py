@@ -22,7 +22,7 @@ from cds_quizzes.exports import (
     sessions_dataframe,
 )
 from cds_quizzes.importers import import_roster, import_workbook
-from cds_quizzes.models import Answer, Assignment, FormQuestion, QuizSession, Student
+from cds_quizzes.models import Answer, Assignment, DraftAnswer, FormQuestion, QuizSession, Student
 from cds_quizzes.services import WorkflowError, reset_student_state
 from cds_quizzes.streamlit_runtime import initialize_streamlit_app_data
 
@@ -125,6 +125,7 @@ try:
             "form_questions": count_rows(db, FormQuestion),
             "sessions": count_rows(db, QuizSession),
             "answers": count_rows(db, Answer),
+            "draft_answers": count_rows(db, DraftAnswer),
         }
         st.dataframe(
             [{"table": table, "rows": rows} for table, rows in counts.items()],

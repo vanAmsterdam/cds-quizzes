@@ -5,7 +5,7 @@ from datetime import datetime
 from functools import lru_cache
 from typing import Iterator
 
-from sqlalchemy import create_engine, event, func, select
+from sqlalchemy import create_engine, event, func, inspect, select, text
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -59,7 +59,9 @@ def session_scope() -> Iterator[Session]:
 
 
 def init_database() -> None:
-    Base.metadata.create_all(get_engine())
+    engine = get_engine()
+    Base.metadata.create_all(engine)
+    _migrate_schema(engine)
     with session_scope() as db:
         seed_round0_question(db)
 
@@ -115,6 +117,24 @@ def _postgres_connect_args(database_url: str) -> dict[str, object]:
     if "sslmode" not in query and "supabase" in (url.host or ""):
         connect_args["sslmode"] = "require"
     return connect_args
+
+
+def _migrate_schema(engine: Engine) -> None:
+    inspector = inspect(engine)
+    if "sessions" not in inspector.get_table_names():
+        return
+    session_columns = {column["name"] for column in inspector.get_columns("sessions")}
+    timestamp_type = "DATETIME" if engine.dialect.name == "sqlite" else "TIMESTAMP"
+    missing_columns = [
+        column_name
+        for column_name in ("discussion_started_at", "discussion_ended_at")
+        if column_name not in session_columns
+    ]
+    if not missing_columns:
+        return
+    with engine.begin() as connection:
+        for column_name in missing_columns:
+            connection.execute(text(f"ALTER TABLE sessions ADD COLUMN {column_name} {timestamp_type}"))
 
 
 def reset_connection_cache() -> None:

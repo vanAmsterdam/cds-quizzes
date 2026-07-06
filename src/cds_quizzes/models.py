@@ -10,12 +10,14 @@ ROUND0_QUESTION_ID = "ROUND0_CHECK"
 
 PHASE_INDIVIDUAL = "INDIVIDUAL"
 PHASE_SELECT_DISCUSSION = "SELECT_DISCUSSION"
+PHASE_DISCUSSION = "DISCUSSION"
 PHASE_REVISION = "REVISION"
 PHASE_DONE = "DONE"
 
 ALL_PHASES = {
     PHASE_INDIVIDUAL,
     PHASE_SELECT_DISCUSSION,
+    PHASE_DISCUSSION,
     PHASE_REVISION,
     PHASE_DONE,
 }
@@ -95,6 +97,8 @@ class QuizSession(Base):
     individual_submitted_at: Mapped[object | None] = mapped_column(DateTime)
     selected_question_id: Mapped[str | None] = mapped_column(String(64))
     selection_confirmed_at: Mapped[object | None] = mapped_column(DateTime)
+    discussion_started_at: Mapped[object | None] = mapped_column(DateTime)
+    discussion_ended_at: Mapped[object | None] = mapped_column(DateTime)
     revision_submitted_at: Mapped[object | None] = mapped_column(DateTime)
     done_at: Mapped[object | None] = mapped_column(DateTime)
     created_at: Mapped[object] = mapped_column(

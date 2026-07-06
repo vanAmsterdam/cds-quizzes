@@ -87,9 +87,10 @@ Each `sign_in_key` belongs to exactly one student. Add one row per student and q
 4. Student clicks `Start round 1 now` or `Start round 2 now`; this starts that round's 6-minute timer.
 5. Individual phase: six questions, six-minute timer based on database start time.
 6. Round 1: student permanently selects one question for discussion.
-7. Round 2 remains locked until Round 1 revision is submitted; then the app randomly selects one assigned question for discussion.
-8. Revision phase: only the selected question is editable.
-9. Done phase: all answers are locked.
+7. Discussion phase: student clicks `Start discussion phase now`; this starts the 2-minute discussion timer.
+8. Revision phase: only the selected question is editable after the discussion timer ends.
+9. Round 2 remains locked until Round 1 revision is submitted; then the app randomly selects one assigned question for discussion and uses the same discussion/revision flow.
+10. Done phase: all answers are locked.
 
 The backend service layer enforces phase locks; disabled or hidden widgets are not trusted for correctness.
 During the individual phase, answer changes are saved as drafts and finalized automatically when the timer expires.

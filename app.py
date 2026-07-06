@@ -17,6 +17,7 @@ except Exception:  # pragma: no cover - optional UI fallback
 
 from cds_quizzes.database import get_session_factory
 from cds_quizzes.models import (
+    PHASE_DISCUSSION,
     PHASE_DONE,
     PHASE_INDIVIDUAL,
     PHASE_REVISION,
@@ -25,10 +26,12 @@ from cds_quizzes.models import (
     ROUND0_QUESTION_ID,
 )
 from cds_quizzes.services import (
+    DISCUSSION_DURATION_SECONDS,
     WorkflowError,
     answer_label,
     authenticate_student,
     complete_individual_phase,
+    finish_discussion_phase,
     get_answers,
     get_assigned_questions,
     get_individual_drafts,
@@ -39,8 +42,10 @@ from cds_quizzes.services import (
     next_unfinished_assignment,
     question_options,
     remaining_seconds,
+    remaining_discussion_seconds,
     save_individual_drafts,
     select_discussion_question,
+    start_discussion_phase,
     submit_revision,
     submit_round0,
 )
@@ -49,6 +54,7 @@ from cds_quizzes.timezone import amsterdam_now
 
 
 TIMER_REFRESH_INTERVAL_MS = 10_000
+DISCUSSION_REFRESH_INTERVAL_MS = 5_000
 
 st.set_page_config(page_title="Classroom Quiz", page_icon=":material/school:", layout="centered")
 initialize_streamlit_app_data()
@@ -153,6 +159,8 @@ def render_real_round(db, student_id: str, round_id: str) -> None:
         render_individual_phase(db, student_id, round_id, session)
     elif session.phase == PHASE_SELECT_DISCUSSION:
         render_selection_phase(db, student_id, round_id)
+    elif session.phase == PHASE_DISCUSSION:
+        render_discussion_phase(db, student_id, round_id, session)
     elif session.phase == PHASE_REVISION:
         render_revision_phase(db, student_id, round_id, session)
     elif session.phase == PHASE_DONE:
@@ -294,6 +302,57 @@ def render_selection_phase(db, student_id: str, round_id: str) -> None:
         except WorkflowError as exc:
             db.rollback()
             st.error(str(exc))
+
+
+def render_discussion_phase(db, student_id: str, round_id: str, session) -> None:
+    questions = get_assigned_questions(db, student_id, round_id)
+    answers = get_answers(db, student_id, round_id)
+    selected_id = session.selected_question_id
+    if not selected_id:
+        st.error("No discussion question is selected.")
+        return
+
+    selected_item = next((item for item in questions if item.question.question_id == selected_id), None)
+    if selected_item is None:
+        st.error("Selected discussion question is not assigned to this student.")
+        return
+
+    st.subheader(f"{round_id}: discussion phase")
+    with st.container(border=True):
+        render_question_block(selected_item.order, selected_item.question)
+        answer = answers.get(selected_id)
+        st.caption(f"Original answer: {answer_label(selected_item.question, answer.original_answer if answer else '')}")
+
+    if session.discussion_started_at is None:
+        st.write("The 2 minute discussion timer starts only after you press the button below.")
+        st.warning("Do not press start until the instructor tells you to begin the discussion phase.")
+        if st.button("Start discussion phase now", type="primary"):
+            try:
+                start_discussion_phase(db, student_id, round_id)
+                db.commit()
+                st.rerun()
+            except WorkflowError as exc:
+                db.rollback()
+                st.error(str(exc))
+        return
+
+    remaining = remaining_discussion_seconds(session, amsterdam_now())
+    if remaining > 0:
+        mins, secs = divmod(remaining, 60)
+        st.metric("Discussion time remaining", f"{mins}:{secs:02d}")
+        st.progress(remaining / DISCUSSION_DURATION_SECONDS)
+        st.write("Discuss this question with your peers. Revision opens when the timer ends.")
+        if st_autorefresh is not None:
+            st_autorefresh(interval=DISCUSSION_REFRESH_INTERVAL_MS, key=f"discussion-timer:{student_id}:{round_id}")
+        return
+
+    try:
+        finish_discussion_phase(db, student_id, round_id)
+        db.commit()
+        st.rerun()
+    except WorkflowError as exc:
+        db.rollback()
+        st.error(str(exc))
 
 
 def render_revision_phase(db, student_id: str, round_id: str, session) -> None:

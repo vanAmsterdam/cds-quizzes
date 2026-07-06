@@ -20,6 +20,8 @@ def sessions_dataframe(db: Session) -> pd.DataFrame:
                 "individual_submitted_at": row.individual_submitted_at,
                 "selected_question_id": row.selected_question_id,
                 "selection_confirmed_at": row.selection_confirmed_at,
+                "discussion_started_at": row.discussion_started_at,
+                "discussion_ended_at": row.discussion_ended_at,
                 "revision_submitted_at": row.revision_submitted_at,
                 "done_at": row.done_at,
                 "created_at": row.created_at,

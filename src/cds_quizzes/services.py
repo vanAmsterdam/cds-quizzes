@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from .database import database_now
 from .models import (
+    PHASE_DISCUSSION,
     PHASE_DONE,
     PHASE_INDIVIDUAL,
     PHASE_REVISION,
@@ -29,6 +30,7 @@ from .security import hash_sign_in_key
 from .timezone import amsterdam_now
 
 INDIVIDUAL_DURATION_SECONDS = 360
+DISCUSSION_DURATION_SECONDS = 120
 ROUND2_ID = "Round 2"
 
 
@@ -165,6 +167,14 @@ def remaining_seconds(session: QuizSession, now: datetime | None = None) -> int:
     return max(0, INDIVIDUAL_DURATION_SECONDS - elapsed)
 
 
+def remaining_discussion_seconds(session: QuizSession, now: datetime | None = None) -> int:
+    if session.discussion_started_at is None:
+        return DISCUSSION_DURATION_SECONDS
+    now = now or amsterdam_now()
+    elapsed = int((now - session.discussion_started_at).total_seconds())
+    return max(0, DISCUSSION_DURATION_SECONDS - elapsed)
+
+
 def complete_individual_phase(db: Session, student_id: str, round_id: str, answers: dict[str, str | None]) -> None:
     session = get_or_create_real_session(db, student_id, round_id)
     if session.phase != PHASE_INDIVIDUAL:
@@ -192,7 +202,7 @@ def complete_individual_phase(db: Session, student_id: str, round_id: str, answe
     if round_id == ROUND2_ID:
         selected_question_id = _choose_round2_question(question_ids)
         _set_selected_question(db, session, selected_question_id, now)
-        session.phase = PHASE_REVISION
+        session.phase = PHASE_DISCUSSION
     else:
         session.phase = PHASE_SELECT_DISCUSSION
     session.updated_at = now
@@ -211,6 +221,35 @@ def select_discussion_question(db: Session, student_id: str, round_id: str, ques
         raise WorkflowError("Selected question is not assigned to this student.")
     now = database_now(db)
     _set_selected_question(db, session, question_id, now)
+    session.phase = PHASE_DISCUSSION
+    session.updated_at = now
+
+
+def start_discussion_phase(db: Session, student_id: str, round_id: str) -> None:
+    session = db.get(QuizSession, {"student_id": student_id, "round_id": round_id})
+    if session is None or session.phase != PHASE_DISCUSSION:
+        raise WorkflowError("Discussion phase is not available for this session.")
+    if session.selected_question_id is None:
+        raise WorkflowError("A discussion question must be selected before discussion starts.")
+    if session.discussion_started_at is not None:
+        raise WorkflowError("Discussion phase has already started.")
+
+    now = database_now(db)
+    session.discussion_started_at = now
+    session.updated_at = now
+
+
+def finish_discussion_phase(db: Session, student_id: str, round_id: str) -> None:
+    session = db.get(QuizSession, {"student_id": student_id, "round_id": round_id})
+    if session is None or session.phase != PHASE_DISCUSSION:
+        raise WorkflowError("Discussion phase is not available for this session.")
+    if session.discussion_started_at is None:
+        raise WorkflowError("Discussion phase has not started.")
+    if remaining_discussion_seconds(session, database_now(db)) > 0:
+        raise WorkflowError("Discussion phase is still in progress.")
+
+    now = database_now(db)
+    session.discussion_ended_at = now
     session.phase = PHASE_REVISION
     session.updated_at = now
 
